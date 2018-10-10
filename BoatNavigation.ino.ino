@@ -35,12 +35,15 @@ class NavigationObject
   public:
     int latitude,   //Широта
         longitude,  //Долгота
-        g_day, g_month, g_year, g_seconds; //День, месяц, год, секунды
-    float compas_degrees;  //Азимут с компаса в градусах
+        g_day, g_month, g_year, g_seconds, //День, месяц, год, секунды
+        
+        actual_point = 0; //Номер обрабатываемой целевой точки.
+        
     bool FINISH_FLAG = false; //Флаг завершения миссии
-    int actual_point = 0;//Номер обрабатываемой целевой точки
-    float to_point_distance; //Расстояние до целевой точки
-    float to_point_azimuth; //Азимут целевой точки
+    
+    float to_point_distance, //Расстояние до целевой точки
+          to_point_azimuth,  //Азимут целевой точки
+          compas_degrees;    //Азимут с компаса в градусах
 
     //Количество waypoint'ов
     #define waypoint_count 2
@@ -48,8 +51,8 @@ class NavigationObject
     //Маршрут
     waypoint route[waypoint_count] = {{48.529998, 135.055007, 0},
                                       {48.530651, 135.054473, 2}
-        
                                      };
+                                     
     //В констукторе класса помещена принудительная классификация начальной и финальной точки
     NavigationObject() 
     {
@@ -102,7 +105,7 @@ class NavigationObject
         }
     }
 
-    void Get_Compas_Data() //Считывание и расчёт азимута с компаса
+    void get_compas_data() //Считывание и расчёт азимута с компаса
     {
       Vector norm = compass.readNormalize();
 
