@@ -33,43 +33,44 @@ struct waypoint
 class NavigationObject
 {
   public:
-    int latitude,   //Широта у объекта 
-        longitude,  //Долгота у объекта
+    float latitude,   //Широта у объекта
+          longitude;  //Долгота у объекта
 
-        actual_point = 0; //Номер обрабатываемой целевой точки.
+          lantirude_buff, //Буфер для хранение широты
+          longitude_buff; //Буфер для хранения долготы
+
+    int actual_point = 0; //Номер обрабатываемой целевой точки.
 
     bool FINISH_FLAG = false; //Флаг завершения миссии
 
     float to_point_distance, //Расстояние до целевой точки
-          to_point_azimuth,  //Азимут целевой точки
-          compas_degrees;    //Азимут с компаса в градусах
+          point_azimuth,     //Азимут целевой точки
+          compas_degrees,    //Азимут с компаса в градусах
+          cross_track_error_degrees; //Ошибка курса
 
     //Количество waypoint'ов
-    #define waypoint_count 2
+#define waypoint_count 2
 
     //Маршрут
-    waypoint route[waypoint_count] = {{48.529998, 135.055007, 0},
+    waypoint route[waypoint_count] = {{48.529998, 135.055007, 2},
       {48.530651, 135.054473, 2}
     };
-
-    //В констукторе класса помещена принудительная классификация начальной и финальной точки
-    NavigationObject()
-    {
-      route[0].point_type = 0;  //Классификация начальной точки
-      route[waypoint_count - 1].point_type = 2; //Классификация финальной точки
-    }
 
 
     void get_location() //Считывание долготы и широты
     {
-      while (ss.available() > 0)
-        if (gps.location.isValid())
-        {
-          latitude = gps.location.lat();
-          Serial.println(latitude);
 
-          longitude = gps.location.lng();
-          Serial.println(longitude);
+      while (ss.available() > 0)
+        if (gps.encode(ss.read())) {
+
+          if (gps.location.isValid())
+          {
+            latitude = gps.location.lat();
+            Serial.println(latitude);
+
+            longitude = gps.location.lng();
+            Serial.println(longitude);
+          }
         }
     }
 
@@ -151,10 +152,28 @@ class NavigationObject
 
       //Внесение ответов в базу
       to_point_distance = dist;
-      to_point_azimuth = angledeg;
+      point_azimuth = angledeg;
     }
-   
+
+
+    void get_cross_track_error()
+    {
+      cross_track_error_degrees = point_azimuth - compas_degrees;
+    }
     
+    bool resive_point()
+    {
+      if ((fabs(latitude - route[actual_point].point_latitude) <= 0.00001) &&
+          fabs((longitude - route[actual_point].point_longitude) <= 0.00001))
+      {
+        return true;
+      }
+      else
+      {
+        return false;
+      }
+    }
+
 };
 
 void setup() {
@@ -178,15 +197,34 @@ void setup() {
   compass.setSamples(HMC5883L_SAMPLES_8); // Set number of samples averaged
   compass.setOffset(-127, -118);  // Set calibration offset. See HMC5883L_calibration.ino
 
-  NavigationObject Boat; //Создание объекта для лодки
-  Boat.math();//Расчитать
+
 }
 
-
-
+NavigationObject Boat;
+int count = 0;
 void loop() {
   // put your main code here, to run repeatedly:
 
+  while (!Boat.resive_point())
+  {
+    Boat.get_location();
+
+    Boat.get_degrees();
+    Boat.math();
+    Boat.get_cross_track_error();
+
+
+    Serial.print("Position : "); Serial.print(Boat.latitude,7); Serial.print("  "); Serial.println(Boat.longitude,7);
+
+    Serial.print("Distance to point "); Serial.println(Boat.to_point_distance,7);
+    Serial.print("Azimuth "); Serial.println(Boat.point_azimuth,7);
+    Serial.print("Degrees ");Serial.println(Boat.compas_degrees);
+    Serial.print("Cross-track eroor "); Serial.println(Boat.cross_track_error_degrees,7);
+    if (Boat.resive_point()) Serial.println("Resive the point");
+    delay(200);
+
+  }
+  Serial.println("Finish");
 
 }
 
