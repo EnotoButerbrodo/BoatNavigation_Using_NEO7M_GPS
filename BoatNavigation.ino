@@ -1,4 +1,4 @@
-//Пины для SoftwareSerial 
+//Пины для SoftwareSerial
 #define RXpin 2 //RX пин
 #define TXpin 3 //TX пин
 
@@ -33,79 +33,47 @@ struct waypoint
 class NavigationObject
 {
   public:
-    int latitude,   //Широта
-        longitude,  //Долгота
-        g_day, g_month, g_year, g_seconds, //День, месяц, год, секунды
-        
+    int latitude,   //Широта у объекта 
+        longitude,  //Долгота у объекта
+
         actual_point = 0; //Номер обрабатываемой целевой точки.
-        
+
     bool FINISH_FLAG = false; //Флаг завершения миссии
-    
+
     float to_point_distance, //Расстояние до целевой точки
           to_point_azimuth,  //Азимут целевой точки
           compas_degrees;    //Азимут с компаса в градусах
 
     //Количество waypoint'ов
     #define waypoint_count 2
-    
+
     //Маршрут
     waypoint route[waypoint_count] = {{48.529998, 135.055007, 0},
-                                      {48.530651, 135.054473, 2}
-                                     };
-                                     
+      {48.530651, 135.054473, 2}
+    };
+
     //В констукторе класса помещена принудительная классификация начальной и финальной точки
-    NavigationObject() 
+    NavigationObject()
     {
       route[0].point_type = 0;  //Классификация начальной точки
       route[waypoint_count - 1].point_type = 2; //Классификация финальной точки
     }
-    
-    
-    void get_GPS_location() //Считывание долготы и широты
-    {
-      if (gps.location.isValid())
-      {
-        latitude = gps.location.lat();
-        Serial.println(latitude);
 
-        longitude = gps.location.lng();
-        Serial.println(longitude);
-      }
 
-    }
-
-    void get_GPS_date() //Считывание даты с GPS
+    void get_location() //Считывание долготы и широты
     {
       while (ss.available() > 0)
-        if (gps.encode(ss.read())) {
-
-
-          if (gps.date.isValid())
-          {
-            g_month = gps.date.month();
-            g_day   = gps.date.day();
-            g_year  = gps.date.year();
-          }
-          else
-          {
-            Serial.println("No");
-          }
-        }
-    }
-
-    void get_GPS_time() //Считывание времени с GPS
-    {
-      while (ss.available() > 0)
-        if (gps.encode(ss.read()))
+        if (gps.location.isValid())
         {
-          if (gps.time.isValid())
-          {
-            g_seconds = gps.time.second();
-          }
+          latitude = gps.location.lat();
+          Serial.println(latitude);
+
+          longitude = gps.location.lng();
+          Serial.println(longitude);
         }
     }
 
-    void get_compas_data() //Считывание и расчёт азимута с компаса
+    void get_degrees() //Считывание и расчёт азимута с компаса
     {
       Vector norm = compass.readNormalize();
 
@@ -143,8 +111,8 @@ class NavigationObject
       float rad = 6372795.0; //Это число должно быть float. Обязательно
 
       //координаты двух точек
-      float llat1 = route[actual_point].point_latitude;
-      float llong1 = route[actual_point].point_longitude;
+      float llat1 = latitude;
+      float llong1 = longitude;
       float llat2 = route[actual_point + 1].point_latitude;
       float llong2 = route[actual_point + 1].point_longitude;
 
@@ -185,12 +153,13 @@ class NavigationObject
       to_point_distance = dist;
       to_point_azimuth = angledeg;
     }
-
+   
+    
 };
 
 void setup() {
   // Создание Serial подключения
-  Serial.begin(HardwareserialSpeed); 
+  Serial.begin(HardwareserialSpeed);
   ss.begin(SoftwareserialSpeed); //Для GPS
 
   // Инициализация компаса
@@ -207,7 +176,7 @@ void setup() {
   compass.setMeasurementMode(HMC5883L_CONTINOUS);  // Set measurement mode
   compass.setDataRate(HMC5883L_DATARATE_30HZ); // Set data rate
   compass.setSamples(HMC5883L_SAMPLES_8); // Set number of samples averaged
-  compass.setOffset(-127, -118);  // Set calibration offset. See HMC5883L_calibration.ino 
+  compass.setOffset(-127, -118);  // Set calibration offset. See HMC5883L_calibration.ino
 
   NavigationObject Boat; //Создание объекта для лодки
   Boat.math();//Расчитать
