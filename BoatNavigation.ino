@@ -56,16 +56,15 @@ class NavigationObject
     void get_location() //Считывание долготы и широты
     {
 
-      while (ss.available() > 0)
-        if (gps.encode(ss.read())) { //Пиздец какая важная строка. Без неё всё виснет
-
-          if (gps.location.isValid())
+      while (ss.available() > 0) 
+        if (gps.encode(ss.read())) { //Считываем пакет NMEA и расшифровываем его
+          if (gps.location.isValid()) //Если информация о позиции доступна
           {
-            latitude = gps.location.lat();
-            Serial.println(latitude);
+            latitude = gps.location.lat(); //Широта
+            //Serial.println(latitude);
 
-            longitude = gps.location.lng();
-            Serial.println(longitude);
+            longitude = gps.location.lng(); //Долгота
+            //Serial.println(longitude);
           }
         }
     }
@@ -91,9 +90,32 @@ class NavigationObject
 
     bool isFinish() //Проверка на достижения последней точки
     {
-      if (route[actual_point].point_type == 1)
+      if (route[actual_point].point_type == 1) //Если точка имеет пометку финальной
       {
         return true;
+      }
+      else
+      {
+        return false;
+      }
+    }
+
+    bool resive_point() //Проверка на достижение окрестностей целевой точки
+    {
+      if ((fabs(latitude - route[actual_point].point_latitude) <= 0.00001) &&
+          fabs((longitude - route[actual_point].point_longitude) <= 0.00001))
+      {
+        return true;
+
+        if (!isFinish()) //Если не достигли конечной точки
+        {
+          actual_point ++; // Начинаем работать с другой
+        }
+        else
+        {
+          FINISH_FLAG = true; //Иначе отмечаем завершение миссии
+          Serial.println("Finish mission");
+        }
       }
       else
       {
@@ -155,29 +177,6 @@ class NavigationObject
       cross_track_error = azimuth - bearing;
     }
 
-    bool resive_point() //Проверка на достижение окрестностей целевой точки
-    {
-      if ((fabs(latitude - route[actual_point].point_latitude) <= 0.00001) &&
-          fabs((longitude - route[actual_point].point_longitude) <= 0.00001))
-      {
-        return true;
-        
-        if(!Boat.ifFinish()) //Если не достигли конечной точки
-        {          
-        actual_point ++; // Начинаем работать с другой        
-        }
-        else
-        {
-          FINISH_FLAG = true; //Иначе отмечаем завершение миссии
-          Serial.println("Finish mission");
-        }
-       
-      }
-      else
-      {
-        return false;
-      }
-    }
 };
 
 
@@ -225,8 +224,8 @@ void loop() {
     Serial.print("Distance to point "); Serial.println(Boat.distance_to_waypoint);
     Serial.print("Azimuth "); Serial.println(Boat.azimuth, 7);
     Serial.print("Bearing "); Serial.println(Boat.bearing);
-    Serial.print("Cross-track eroor "); Serial.println(Boat.cross_track_error);
-    
+    Serial.print("Cross-track error "); Serial.println(Boat.cross_track_error);
+
     delay(200);
 
   }
