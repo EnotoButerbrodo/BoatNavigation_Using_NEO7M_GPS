@@ -26,7 +26,7 @@ struct waypoint
   float point_latitude,   //Широта
         point_longitude;  //Долгота
 
-  byte point_type;  //0-начальный 1-обычный 2-конечный
+  bool point_type;  //0-обычный 1-конечный
 };
 
 //Основной класс для работы с объектом навигации
@@ -36,32 +36,28 @@ class NavigationObject
     float latitude,   //Широта у объекта
           longitude;  //Долгота у объекта
 
-          lantirude_buff, //Буфер для хранение широты
-          longitude_buff; //Буфер для хранения долготы
-
     int actual_point = 0; //Номер обрабатываемой целевой точки.
 
     bool FINISH_FLAG = false; //Флаг завершения миссии
 
-    float to_point_distance, //Расстояние до целевой точки
-          point_azimuth,     //Азимут целевой точки
-          compas_degrees,    //Азимут с компаса в градусах
-          cross_track_error_degrees; //Ошибка курса
+    float distance_to_waypoint, //Расстояние до целевой точки
+          azimuth,     //Азимут
+          bearing,     //Пеленг судна
+          cross_track_error; //Ошибка курса
 
     //Количество waypoint'ов
-#define waypoint_count 2
+#define waypoint_count 1
 
     //Маршрут
-    waypoint route[waypoint_count] = {{48.529998, 135.055007, 2},
-      {48.530651, 135.054473, 2}
-    };
+    waypoint route[waypoint_count] = {{48.529998, 135.055007, 1}};
+
 
 
     void get_location() //Считывание долготы и широты
     {
 
       while (ss.available() > 0)
-        if (gps.encode(ss.read())) {
+        if (gps.encode(ss.read())) { //Пиздец какая важная строка. Без неё всё виснет
 
           if (gps.location.isValid())
           {
@@ -74,7 +70,7 @@ class NavigationObject
         }
     }
 
-    void get_degrees() //Считывание и расчёт азимута с компаса
+    void get_bearing() //Определение пеленга
     {
       Vector norm = compass.readNormalize();
 
@@ -90,14 +86,13 @@ class NavigationObject
       // Convert to degrees
       float headingDegrees = ((heading * 180 / M_PI) + 130);
       if (headingDegrees >= 360) headingDegrees -= 360;
-      compas_degrees = headingDegrees;
+      bearing = headingDegrees;
     }
 
     bool isFinish() //Проверка на достижения последней точки
     {
-      if (route[actual_point].point_type == 2)
+      if (route[actual_point].point_type == 1)
       {
-        FINISH_FLAG = true;
         return true;
       }
       else
@@ -114,8 +109,8 @@ class NavigationObject
       //координаты двух точек
       float llat1 = latitude;
       float llong1 = longitude;
-      float llat2 = route[actual_point + 1].point_latitude;
-      float llong2 = route[actual_point + 1].point_longitude;
+      float llat2 = route[actual_point].point_latitude;
+      float llong2 = route[actual_point].point_longitude;
 
       //в радианах
       float lat1 = (llat1 * M_PI) / 180.0;
@@ -151,30 +146,40 @@ class NavigationObject
       float angledeg = anglerad2 * (180.0 / M_PI);
 
       //Внесение ответов в базу
-      to_point_distance = dist;
-      point_azimuth = angledeg;
+      distance_to_waypoint = dist;
+      azimuth = angledeg;
     }
 
-
-    void get_cross_track_error()
+    void get_cross_track_error() //Вычисление ошибки курса
     {
-      cross_track_error_degrees = point_azimuth - compas_degrees;
+      cross_track_error = azimuth - bearing;
     }
-    
-    bool resive_point()
+
+    bool resive_point() //Проверка на достижение окрестностей целевой точки
     {
       if ((fabs(latitude - route[actual_point].point_latitude) <= 0.00001) &&
           fabs((longitude - route[actual_point].point_longitude) <= 0.00001))
       {
         return true;
+        
+        if(!Boat.ifFinish()) //Если не достигли конечной точки
+        {          
+        actual_point ++; // Начинаем работать с другой        
+        }
+        else
+        {
+          FINISH_FLAG = true; //Иначе отмечаем завершение миссии
+          Serial.println("Finish mission");
+        }
+       
       }
       else
       {
         return false;
       }
     }
-
 };
+
 
 void setup() {
   // Создание Serial подключения
@@ -200,31 +205,31 @@ void setup() {
 
 }
 
+//Объект для работы с лодочкой
 NavigationObject Boat;
-int count = 0;
+
 void loop() {
   // put your main code here, to run repeatedly:
 
-  while (!Boat.resive_point())
+  while (!Boat.FINISH_FLAG)//Пока не достигли точки
   {
-    Boat.get_location();
+    Boat.get_location();//Получаем данные с GPS
+    Boat.get_bearing(); //Получаем пеленг
+    Boat.math(); //Считаем азимут и расстояние до точки
+    Boat.get_cross_track_error(); //Расчитываем ошибку курса
+    Boat.resive_point(); //Проверка на достижение точки и на завершение миссии
 
-    Boat.get_degrees();
-    Boat.math();
-    Boat.get_cross_track_error();
+    //Выводим
+    Serial.print("Position : "); Serial.print(Boat.latitude, 7); Serial.print("  "); Serial.println(Boat.longitude, 7);
 
-
-    Serial.print("Position : "); Serial.print(Boat.latitude,7); Serial.print("  "); Serial.println(Boat.longitude,7);
-
-    Serial.print("Distance to point "); Serial.println(Boat.to_point_distance,7);
-    Serial.print("Azimuth "); Serial.println(Boat.point_azimuth,7);
-    Serial.print("Degrees ");Serial.println(Boat.compas_degrees);
-    Serial.print("Cross-track eroor "); Serial.println(Boat.cross_track_error_degrees,7);
-    if (Boat.resive_point()) Serial.println("Resive the point");
+    Serial.print("Distance to point "); Serial.println(Boat.distance_to_waypoint);
+    Serial.print("Azimuth "); Serial.println(Boat.azimuth, 7);
+    Serial.print("Bearing "); Serial.println(Boat.bearing);
+    Serial.print("Cross-track eroor "); Serial.println(Boat.cross_track_error);
+    
     delay(200);
 
   }
-  Serial.println("Finish");
 
 }
 
