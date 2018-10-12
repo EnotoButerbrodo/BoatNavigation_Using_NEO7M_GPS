@@ -90,14 +90,7 @@ class NavigationObject
 
     bool isFinish() //Проверка на достижения последней точки
     {
-      if (route[actual_point].point_type == 1) //Если точка имеет пометку финальной
-      {
-        return true;
-      }
-      else
-      {
-        return false;
-      }
+      return route[actual_point].point_type;
     }
 
     bool resive_point() //Проверка на достижение окрестностей целевой точки
