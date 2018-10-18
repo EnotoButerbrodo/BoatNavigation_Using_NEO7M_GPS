@@ -5,6 +5,9 @@
 #define SoftwareserialSpeed 38600 //Скорость для SoftwareSerial подключения
 #define HardwareserialSpeed 38600 //Скорость для Serial подключения
 
+//pi - число pi, rad - радиус сферы (Земли)
+#define rad (6372795.0) //Это число должно быть float. Обязательно
+
 #include <TinyGPS++.h> //Для расшифровки пакетом NMEA с GPS для дальнейшей работы с ними
 #include <SoftwareSerial.h> //Для подключения GPS к Arduino
 #include <Wire.h> //Для подключение HMC5883L по протоколу I2C
@@ -56,7 +59,7 @@ class NavigationObject
     void get_location() //Считывание долготы и широты
     {
 
-      while (ss.available() > 0) 
+      while (ss.available() > 0)
         if (gps.encode(ss.read())) { //Считываем пакет NMEA и расшифровываем его
           if (gps.location.isValid()) //Если информация о позиции доступна
           {
@@ -90,20 +93,13 @@ class NavigationObject
 
     bool isFinish() //Проверка на достижения последней точки
     {
-      if (route[actual_point].point_type == 1) //Если точка имеет пометку финальной
-      {
-        return true;
-      }
-      else
-      {
-        return false;
-      }
+      return route[actual_point].point_type;
     }
 
     bool resive_point() //Проверка на достижение окрестностей целевой точки
     {
-      if ((fabs(latitude - route[actual_point].point_latitude) <= 0.00001) &&
-          fabs((longitude - route[actual_point].point_longitude) <= 0.00001))
+      if ((fabs(latitude - route[actual_point].point_latitude) <= 0.0001) &&
+          fabs((longitude - route[actual_point].point_longitude) <= 0.0001))
       {
         return true;
 
@@ -125,20 +121,11 @@ class NavigationObject
 
     void math() //Расчёт расстояние между точками и азимута
     {
-      //pi - число pi, rad - радиус сферы (Земли)
-      float rad = 6372795.0; //Это число должно быть float. Обязательно
-
-      //координаты двух точек
-      float llat1 = latitude;
-      float llong1 = longitude;
-      float llat2 = route[actual_point].point_latitude;
-      float llong2 = route[actual_point].point_longitude;
-
-      //в радианах
-      float lat1 = (llat1 * M_PI) / 180.0;
-      float lat2 = (llat2 * M_PI) / 180.0;
-      float long1 = (llong1 * M_PI) / 180.0;
-      float long2 = llong2 * M_PI / 180.0;
+      //координаты двух точек в радианах
+      float lat1 = (latitude * M_PI) / 180.0;
+      float lat2 = (route[actual_point].point_latitude * M_PI) / 180.0;
+      float long1 = (longitude * M_PI) / 180.0;
+      float long2 = route[actual_point].point_longitude * M_PI / 180.0;
 
       //Косинусы и синусы широт, разницы долгот
       float cl1 = cos(lat1);
@@ -164,8 +151,7 @@ class NavigationObject
 
       float z2 = (int)(z + 180.0) % 360 - 180.0;
       z2 = -(z2 * (M_PI / 180.0));
-      float anglerad2 = z2 - ((2 * M_PI) * floor((z2 / (2 * M_PI))));
-      float angledeg = anglerad2 * (180.0 / M_PI);
+      float angledeg = (z2 - ((2 * M_PI) * floor((z2 / (2 * M_PI))))) * (180.0 / M_PI);
 
       //Внесение ответов в базу
       distance_to_waypoint = dist;
@@ -201,34 +187,49 @@ void setup() {
   compass.setSamples(HMC5883L_SAMPLES_8); // Set number of samples averaged
   compass.setOffset(-127, -118);  // Set calibration offset. See HMC5883L_calibration.ino
 
-
+  Serial.println("Wait until GPS find your location");
 }
 
 //Объект для работы с лодочкой
 NavigationObject Boat;
+bool SERIAL_FLAG = false;
+
+int times = millis();
 
 void loop() {
   // put your main code here, to run repeatedly:
-
   while (!Boat.FINISH_FLAG)//Пока не достигли точки
   {
-    Boat.get_location();//Получаем данные с GPS
-    Boat.get_bearing(); //Получаем пеленг
-    Boat.math(); //Считаем азимут и расстояние до точки
-    Boat.get_cross_track_error(); //Расчитываем ошибку курса
-    Boat.resive_point(); //Проверка на достижение точки и на завершение миссии
+    
+      Boat.get_location();//Получаем данные с GPS
+      Boat.get_bearing(); //Получаем пеленг
+      Boat.math(); //Считаем азимут и расстояние до точки
+      Boat.get_cross_track_error(); //Расчитываем ошибку курса
+      Boat.resive_point(); //Проверка на достижение точки и на завершение миссии
+  
+  //Выводим
+  /*if(Boat.latitude == 0.0 || Boat.longitude == 0.0){
+    Serial.print(".");
+    delay(1000);
+    continue;
+    }
+  */
 
-    //Выводим
-    Serial.print("Position : "); Serial.print(Boat.latitude, 7); Serial.print("  "); Serial.println(Boat.longitude, 7);
 
+  if (millis() - times >= 2000) {
     Serial.print("Distance to point "); Serial.println(Boat.distance_to_waypoint);
-    Serial.print("Azimuth "); Serial.println(Boat.azimuth, 7);
-    Serial.print("Bearing "); Serial.println(Boat.bearing);
+    //Serial.print("Azimuth "); Serial.println(Boat.azimuth, 7);
+    //Serial.print("Bearing "); Serial.println(Boat.bearing);
     Serial.print("Cross-track error "); Serial.println(Boat.cross_track_error);
+    Serial.print("Position : "); Serial.print(Boat.latitude, 6); Serial.print("  "); Serial.println(Boat.longitude, 6);
 
-    delay(200);
-
+    Serial.println();
+    times = millis();
   }
+
+  // delay(200);
+
+}
 
 }
 
